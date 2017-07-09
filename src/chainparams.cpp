@@ -89,6 +89,8 @@ public:
         consensus.nCLTVStartBlock = 598725;
         consensus.nBIP66MinStartBlock = 1200000;
         consensus.nAuxPowStartHeight = AuxPow::START_MAINNET;
+        consensus.nBIP9StartHeight = 4500000;
+        consensus.nSegWitStartHeight = 4000000;
 
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
@@ -186,6 +188,8 @@ public:
         consensus.nCLTVStartBlock = 502664;
         consensus.nBIP66MinStartBlock = 800000;
         consensus.nAuxPowStartHeight = AuxPow::START_TESTNET;
+        consensus.nBIP9StartHeight = 4500000;
+        consensus.nSegWitStartHeight = 4000000;
 
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
@@ -274,6 +278,8 @@ public:
         consensus.nCLTVStartBlock = 1;
         consensus.nBIP66MinStartBlock = 1;
         consensus.nAuxPowStartHeight = AuxPow::START_REGTEST;
+        consensus.nBIP9StartHeight = 4500000;
+        consensus.nSegWitStartHeight = 4000000;
 
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 0;

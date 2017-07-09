@@ -219,10 +219,6 @@ bool CheckBlockProofOfWork(const CBlockHeader *pblock, const Consensus::Params& 
 {
     // LogPrint("txdb", "CheckBlockProofOfWork(): block: %s\n", pblock->ToString());  // LEDTMP
 
-    if (!params.fPowAllowMinDifficultyBlocks
-        && (pblock->IsAuxPow() && pblock->GetChainID() != AuxPow::CHAIN_ID))
-        return error("CheckBlockProofOfWork() : block does not have our chain ID");
-
     if (pblock->auxpow && (pblock->auxpow.get() != NULL))
     {
         if (!pblock->auxpow->Check(pblock->GetHash(), pblock->GetChainID(), params))
@@ -238,6 +234,19 @@ bool CheckBlockProofOfWork(const CBlockHeader *pblock, const Consensus::Params& 
             return error("CheckBlockProofOfWork() : proof of work failed");
     }
     return true;
+}
+
+bool CheckAuxPowValidity(const CBlockHeader* pblock, int nHeight, const Consensus::Params& params)
+{
+    if (!params.fPowAllowMinDifficultyBlocks)
+    {
+        int chainIDMask = nHeight < params.nBIP9StartHeight ?
+            0xFFFFFFFF / AuxPow::BLOCK_VERSION_CHAIN_START :
+            ~(VERSIONBITS_TOP_MASK / AuxPow::BLOCK_VERSION_CHAIN_START);
+        if ((pblock->GetChainID() & chainIDMask) != AuxPow::CHAIN_ID)
+            return error("CheckAuxPowValidity() : block does not have our chain ID");
+    }
+    return true;    
 }
 
 // TODO LED TMP temporary public interface for passing the build of test/pow_tests.cpp only

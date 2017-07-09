@@ -3525,7 +3525,8 @@ static bool CheckIndexAgainstCheckpoint(const CBlockIndex* pindexPrev, CValidati
 bool IsWitnessEnabled(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
     LOCK(cs_main);
-    return (VersionBitsState(pindexPrev, params, Consensus::DEPLOYMENT_SEGWIT, versionbitscache) == THRESHOLD_ACTIVE);
+    return pindexPrev->nHeight+1 >= params.nSegWitStartHeight;
+//    return (VersionBitsState(pindexPrev, params, Consensus::DEPLOYMENT_SEGWIT, versionbitscache) == THRESHOLD_ACTIVE);
 }
 
 // Compute at which vout of the block's coinbase transaction the witness
@@ -3585,9 +3586,15 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     int nHeight = pindexPrev->nHeight+1;
 
     // Check if auxpow is allowed at this height if block has it
-    if (block.auxpow && block.auxpow.get() != NULL && nHeight < GetAuxPowStartBlock(consensusParams))
-        return state.DoS(100, error("%s : premature auxpow block", __func__),
-                         REJECT_INVALID, "time-too-new");
+    if (block.auxpow && block.auxpow.get() != NULL)
+    {
+        if (nHeight < GetAuxPowStartBlock(consensusParams))
+            return state.DoS(100, error("%s : premature auxpow block", __func__),
+                             REJECT_INVALID, "time-too-new");
+        if (!CheckAuxPowValidity(&block, nHeight, consensusParams))
+            return state.DoS(100, error("%s : invalid auxpow block", __func__),
+                             REJECT_INVALID, "bad-auxpow");
+    }
 
     // Check proof of work
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
@@ -3639,9 +3646,10 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
                                  strprintf("rejected nVersion=0x%08x block", block.nVersion));
 
     // Reject outdated version blocks when 75% of the network (BIP9 rules) has upgraded:
-    if (block.nVersion < VERSIONBITS_TOP_BITS && IsWitnessEnabled(pindexPrev, consensusParams))
-        return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
-                             strprintf("rejected nVersion=0x%08x block", block.nVersion));
+    // Viacoin does not reuse block version for witness indication
+    //if (block.nVersion < VERSIONBITS_TOP_BITS && IsWitnessEnabled(pindexPrev, consensusParams))
+    //    return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
+    //                         strprintf("rejected nVersion=0x%08x block", block.nVersion));
 
     return true;
 }

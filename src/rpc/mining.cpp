@@ -872,10 +872,12 @@ UniValue getauxblock(const UniValue& params, bool fHelp)
         if (hashTarget == 0 || fNegative || fOverflow)
             throw runtime_error("block has invalid difficulty bits");
 
+        int chainIDmask = pindexPrev->nHeight < Params().GetConsensus().nBIP9StartHeight ?
+            (VERSIONBITS_TOP_MASK / AuxPow::BLOCK_VERSION_CHAIN_START) : 0;
         UniValue result(UniValue::VOBJ);
         result.push_back(Pair("target", HexStr(BEGIN(hashTarget), END(hashTarget))));
         result.push_back(Pair("hash", pblock->GetHash().GetHex()));
-        result.push_back(Pair("chainid", pblock->GetChainID()));
+        result.push_back(Pair("chainid", pblock->GetChainID() & ~chainIDmask));
         return result;
     }
     else

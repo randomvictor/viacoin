@@ -19,6 +19,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&);
 bool CheckBlockProofOfWork(const CBlockHeader *pblock, const Consensus::Params&);
+bool CheckAuxPowValidity(const CBlockHeader *pblock, int nHeight, const Consensus::Params&);
 uint256 GetBlockProof(const CBlockIndex& block, const Consensus::Params&);
 
 // TODO LED TMP temporary public interface for passing the build of test/pow_tests.cpp only
