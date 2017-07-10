@@ -110,7 +110,7 @@ void EraseOrphansFor(NodeId peer) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
  * Returns true if there are nRequired or more blocks of minVersion or above
  * in the last Consensus::Params::nMajorityWindow blocks, starting at pstart and going backwards.
  */
-static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned nRequired, const Consensus::Params& consensusParams);
+static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned nRequired, const Consensus::Params& consensusParams, unsigned nMajorityWindow);
 static void CheckBlockIndex(const Consensus::Params& consensusParams);
 
 /** Constant stuff for coinbase transactions we create: */
@@ -1161,7 +1161,7 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
     // sure that such transactions will be mined (unless we're on
     // -testnet/-regtest).
     const CChainParams& chainparams = Params();
-    if (fRequireStandard && tx.nVersion >= 2 && VersionBitsTipState(chainparams.GetConsensus(), Consensus::DEPLOYMENT_CSV) != THRESHOLD_ACTIVE) {
+    if (fRequireStandard && tx.nVersion >= 2 && !IsWitnessEnabled(chainActive.Tip(), chainparams.GetConsensus())) {
         return state.DoS(0, false, REJECT_NONSTANDARD, "premature-version2-tx");
     }
 
@@ -2319,6 +2319,7 @@ VersionBitsCache versionbitscache;
 int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
     LOCK(cs_main);
+    return 6;
     int32_t nVersion = VERSIONBITS_TOP_BITS;
 
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
@@ -2447,7 +2448,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // NOP2 is redefined as CHECKLOCKTIMEVERIFY in blocks with nVersion >= 3
     //
     // Introduce CHECKLOCKTIMEVERIFY at the same time as AuxPow.
-    if (block.nVersion < VERSIONBITS_TOP_BITS
+    if (block.nVersion
         && (block.nVersion & 0xff) >= 3
         && pindex->nHeight >= chainparams.GetConsensus().nCLTVStartBlock)
     {
@@ -2455,9 +2456,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
 
     // Start enforcing the DERSIG (BIP66) rules, for block.nVersion=4 blocks, when 75% of the network has upgraded:
-    if (block.nVersion < VERSIONBITS_TOP_BITS
+    if (block.nVersion
         && (block.nVersion & 0xff) >= 4
-        && IsSuperMajority(4, pindex->pprev, chainparams.GetConsensus().nMajorityEnforceBlockUpgrade, chainparams.GetConsensus())
+        && IsSuperMajority(4, pindex->pprev, chainparams.GetConsensus().nMajorityEnforceBlockUpgrade, chainparams.GetConsensus(), 0)
         && pindex->nHeight >= chainparams.GetConsensus().nBIP66MinStartBlock)
     {
         flags |= SCRIPT_VERIFY_DERSIG;
@@ -2465,7 +2466,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     // Start enforcing BIP68 (sequence locks) and BIP112 (CHECKSEQUENCEVERIFY) using versionbits logic.
     int nLockTimeFlags = 0;
-    if (VersionBitsState(pindex->pprev, chainparams.GetConsensus(), Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
+    if (IsWitnessEnabled(pindex->pprev, chainparams.GetConsensus())) {
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
         nLockTimeFlags |= LOCKTIME_VERIFY_SEQUENCE;
     }
@@ -3525,7 +3526,8 @@ static bool CheckIndexAgainstCheckpoint(const CBlockIndex* pindexPrev, CValidati
 bool IsWitnessEnabled(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
     LOCK(cs_main);
-    return pindexPrev->nHeight+1 >= params.nSegWitStartHeight;
+    return IsSuperMajority(6, pindexPrev, 700, params, 1000) ||
+            (pindexPrev->nHeight+1 >= params.nSegWitStartHeight);
 //    return (VersionBitsState(pindexPrev, params, Consensus::DEPLOYMENT_SEGWIT, versionbitscache) == THRESHOLD_ACTIVE);
 }
 
@@ -3630,7 +3632,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
 
     // Hard fork to introduce OP_CHECKLOCKTIMEVERIFY at the same time as AuxPow
     // Reject block.nVersion=2 once we reach the correct height
-    if (block.nVersion < VERSIONBITS_TOP_BITS
+    if (block.nVersion
         && (block.nVersion & 0xff) < 3
         && nHeight >= consensusParams.nCLTVStartBlock) {
         return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
@@ -3639,9 +3641,9 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     for (int32_t version = 4; version <= 6; ++version) // Viacoin check for version 3, 4 and 5 upgrades
-        if (block.nVersion < VERSIONBITS_TOP_BITS
+        if (block.nVersion
             && (block.nVersion & 0xff) < version
-            && IsSuperMajority(version, pindexPrev, consensusParams.nMajorityRejectBlockOutdated, consensusParams))
+            && IsSuperMajority(version, pindexPrev, consensusParams.nMajorityRejectBlockOutdated, consensusParams, 0))
             return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
                                  strprintf("rejected nVersion=0x%08x block", block.nVersion));
 
@@ -3661,7 +3663,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
 
     // Start enforcing BIP113 (Median Time Past) using versionbits logic.
     int nLockTimeFlags = 0;
-    if (VersionBitsState(pindexPrev, consensusParams, Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
+    if (IsWitnessEnabled(pindexPrev, consensusParams)) {
         nLockTimeFlags |= LOCKTIME_MEDIAN_TIME_PAST;
     }
 
@@ -3689,7 +3691,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
         else
         {
             // Regtest and Unittest: use Bitcoin's supermajority rule
-            if (IsSuperMajority(2, pindexPrev, consensusParams.nMajorityRejectBlockOutdated, consensusParams))
+            if (IsSuperMajority(2, pindexPrev, consensusParams.nMajorityRejectBlockOutdated, consensusParams, 0))
                 checkHeightMismatch = true;
         }
     }
@@ -3867,9 +3869,10 @@ static bool AcceptBlock(const CBlock& block, CValidationState& state, const CCha
     return true;
 }
 
-static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned nRequired, const Consensus::Params& consensusParams)
+static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned nRequired, const Consensus::Params& consensusParams, unsigned nMajorityWindow)
 {
     unsigned int nFound = 0;
+    nMajorityWindow = (nMajorityWindow > 0) ? nMajorityWindow : consensusParams.nMajorityWindow;
     for (int i = 0; i < consensusParams.nMajorityWindow && nFound < nRequired && pstart != NULL; i++)
     {
         // Viacoin mask off the Chain_ID and AuxPow version
