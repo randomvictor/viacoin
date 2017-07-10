@@ -3640,7 +3640,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     }
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
-    for (int32_t version = 4; version <= 6; ++version) // Viacoin check for version 3, 4 and 5 upgrades
+    for (int32_t version = 4; version <= 7; ++version) // Viacoin check for version 3, 4, 5 and 6 upgrades
         if (block.nVersion
             && (block.nVersion & 0xff) < version
             && IsSuperMajority(version, pindexPrev, consensusParams.nMajorityRejectBlockOutdated, consensusParams, 0))
